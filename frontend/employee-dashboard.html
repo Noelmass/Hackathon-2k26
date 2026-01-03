@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Dashboard - HRMS</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>🏢 HRMS</h2>
+                <p id="userName">Loading...</p>
+            </div>
+            <nav class="sidebar-menu">
+                <a href="employee-dashboard.html" class="menu-item active">
+                    <span>📊</span> Dashboard
+                </a>
+                <a href="profile.html" class="menu-item">
+                    <span>👤</span> My Profile
+                </a>
+                <a href="attendance.html" class="menu-item">
+                    <span>📅</span> Attendance
+                </a>
+                <a href="leave.html" class="menu-item">
+                    <span>🏖️</span> Leave Requests
+                </a>
+                <a href="payroll.html" class="menu-item">
+                    <span>💰</span> Payroll
+                </a>
+                <a href="#" onclick="logout()" class="menu-item">
+                    <span>🚪</span> Logout
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="page-header">
+                <h1>Welcome Back!</h1>
+                <p>Here's your overview for today</p>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="cards-grid">
+                <div class="card" style="border-left: 4px solid var(--success-color);">
+                    <div class="card-header">
+                        <span class="card-title">Attendance Today</span>
+                        <span class="card-icon">📅</span>
+                    </div>
+                    <div id="attendanceStatus">
+                        <button id="checkInBtn" class="btn btn-success btn-block" onclick="handleCheckIn()">
+                            Check In
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card" style="border-left: 4px solid var(--warning-color);">
+                    <div class="card-header">
+                        <span class="card-title">Pending Leaves</span>
+                        <span class="card-icon">🏖️</span>
+                    </div>
+                    <div class="card-value" id="pendingLeaves">0</div>
+                </div>
+
+                <div class="card" style="border-left: 4px solid var(--info-color);">
+                    <div class="card-header">
+                        <span class="card-title">This Month Salary</span>
+                        <span class="card-icon">💰</span>
+                    </div>
+                    <div class="card-value" id="monthlySalary">-</div>
+                </div>
+            </div>
+
+            <!-- Recent Attendance -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Recent Attendance</h3>
+                    <a href="attendance.html" class="btn btn-sm btn-primary">View All</a>
+                </div>
+                <div id="recentAttendance">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script>
+        // Check authentication
+        checkAuth();
+
+        // Load dashboard data
+        async function loadDashboard() {
+            const user = getUserData();
+            document.getElementById('userName').textContent = user.name || 'Employee';
+
+            // Load today's attendance status
+            await loadAttendanceStatus();
+
+            // Load pending leaves count
+            await loadPendingLeaves();
+
+            // Load salary info
+            await loadSalaryInfo();
+
+            // Load recent attendance
+            await loadRecentAttendance();
+        }
+
+        async function loadAttendanceStatus() {
+            const result = await apiCall('/attendance/today-status', 'GET');
+            
+            if (result && result.success) {
+                const statusDiv = document.getElementById('attendanceStatus');
+                
+                if (result.check_in && !result.check_out) {
+                    statusDiv.innerHTML = `
+                        <p>Checked in at: <strong>${formatTime(result.check_in)}</strong></p>
+                        <button class="btn btn-danger btn-block" onclick="handleCheckOut()">
+                            Check Out
+                        </button>
+                    `;
+                } else if (result.check_in && result.check_out) {
+                    statusDiv.innerHTML = `
+                        <p>✅ Completed</p>
+                        <p>In: ${formatTime(result.check_in)} | Out: ${formatTime(result.check_out)}</p>
+                    `;
+                }
+            }
+        }
+
+        async function handleCheckIn() {
+            const btn = document.getElementById('checkInBtn');
+            btn.disabled = true;
+            btn.textContent = 'Checking in...';
+
+            const result = await apiCall('/attendance/checkin', 'POST', {});
+            
+            if (result && result.success) {
+                showNotification('Checked in successfully!', 'success');
+                await loadAttendanceStatus();
+                await loadRecentAttendance();
+            } else {
+                showNotification(result?.message || 'Check-in failed', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Check In';
+            }
+        }
+
+        async function handleCheckOut() {
+            const result = await apiCall('/attendance/checkout', 'POST', {});
+            
+            if (result && result.success) {
+                showNotification('Checked out successfully!', 'success');
+                await loadAttendanceStatus();
+                await loadRecentAttendance();
+            } else {
+                showNotification(result?.message || 'Check-out failed', 'error');
+            }
+        }
+
+        async function loadPendingLeaves() {
+            const result = await apiCall('/leave/my-requests', 'GET');
+            
+            if (result && result.success) {
+                const pending = result.leaves.filter(l => l.status === 'pending').length;
+                document.getElementById('pendingLeaves').textContent = pending;
+            }
+        }
+
+        async function loadSalaryInfo() {
+            const result = await apiCall('/payroll/my-salary', 'GET');
+            
+            if (result && result.success && result.salary) {
+                document.getElementById('monthlySalary').textContent = 
+                    formatCurrency(result.salary.net_salary);
+            } else {
+                document.getElementById('monthlySalary').textContent = 'N/A';
+            }
+        }
+
+        async function loadRecentAttendance() {
+            const container = document.getElementById('recentAttendance');
+            const result = await apiCall('/attendance/my-records', 'GET');
+            
+            if (result && result.success && result.attendance.length > 0) {
+                const recent = result.attendance.slice(0, 5);
+                container.innerHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Check In</th>
+                                <th>Check Out</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${recent.map(record => `
+                                <tr>
+                                    <td>${formatDate(record.date)}</td>
+                                    <td>${formatTime(record.check_in)}</td>
+                                    <td>${formatTime(record.check_out)}</td>
+                                    <td>${getStatusBadge(record.status)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📅</div>
+                        <h3>No attendance records</h3>
+                        <p>Check in to start tracking your attendance</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+    </script>
+</body>
+</html>
