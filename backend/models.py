@@ -9,6 +9,7 @@ class User(db.Model):
     password = db.Column(db.String(200))
     role = db.Column(db.String(20))  # admin / employee
 
+
 class Attendance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer)
@@ -17,6 +18,7 @@ class Attendance(db.Model):
     check_out = db.Column(db.String(20))
     status = db.Column(db.String(20))
 
+
 class Leave(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer)
@@ -24,6 +26,7 @@ class Leave(db.Model):
     end_date = db.Column(db.String(20))
     reason = db.Column(db.String(200))
     status = db.Column(db.String(20))
+
 
 class Payroll(db.Model):
     id = db.Column(db.Integer, primary_key=True)
